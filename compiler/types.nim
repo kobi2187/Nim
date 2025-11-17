@@ -845,6 +845,13 @@ proc firstOrd*(conf: ConfigRef; t: PType): Int128 =
       localError(conf, unknownLineInfo,
         "cannot use generic parameter '" & typeToString(t) &
         "' without instantiation; provide explicit type arguments")
+  of tyEmpty:
+    # Issue #23496: Empty sets have no ordinal bounds
+    result = Zero
+    if conf != nil:
+      localError(conf, unknownLineInfo,
+        "cannot determine ordinal bounds for empty set; " &
+        "specify element type explicitly if needed")
   else:
     result = Zero
     fatal(conf, unknownLineInfo, "invalid kind for firstOrd(" & $t.kind & ')')
@@ -948,6 +955,13 @@ proc lastOrd*(conf: ConfigRef; t: PType): Int128 =
       localError(conf, unknownLineInfo,
         "cannot use generic parameter '" & typeToString(t) &
         "' without instantiation; provide explicit type arguments")
+  of tyEmpty:
+    # Issue #23496: Empty sets have no ordinal bounds
+    result = Zero
+    if conf != nil:
+      localError(conf, unknownLineInfo,
+        "cannot determine ordinal bounds for empty set; " &
+        "specify element type explicitly if needed")
   else:
     result = Zero
     fatal(conf, unknownLineInfo, "invalid kind for lastOrd(" & $t.kind & ')')
