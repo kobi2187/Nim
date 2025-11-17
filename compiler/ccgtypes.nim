@@ -1097,6 +1097,13 @@ proc getTypeDescAux(m: BModule; origTyp: PType, check: var IntSet; kind: TypeDes
       "cannot generate code for empty or uninitialized type; " &
       "check for invalid typedesc usage or incomplete type definitions")
     result = NimInt # Return placeholder to avoid cascading errors
+  of tyOr:
+    # Issue #12995: Union types (A | B) need explicit type resolution for code generation
+    let info = if origTyp.sym != nil: origTyp.sym.info else: unknownLineInfo
+    localError(m.config, info,
+      "cannot generate code for union type '" & typeToString(t) & "'; " &
+      "union types must be resolved to a specific type before code generation")
+    result = NimInt # Return placeholder to avoid cascading errors
   else:
     internalError(m.config, "getTypeDescAux(" & $t.kind & ')')
     result = ""
