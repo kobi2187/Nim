@@ -1111,6 +1111,13 @@ proc getTypeDescAux(m: BModule; origTyp: PType, check: var IntSet; kind: TypeDes
       "cannot generate code for uninstantiated generic type '" & typeToString(t) & "'; " &
       "provide explicit type parameters (e.g., foo[int] instead of foo)")
     result = NimInt # Return placeholder to avoid cascading errors
+  of tyEmpty:
+    # Issue #22431: Empty collections have no concrete type for code generation
+    let info = if origTyp.sym != nil: origTyp.sym.info else: unknownLineInfo
+    localError(m.config, info,
+      "cannot generate code for empty collection with unknown element type; " &
+      "specify element type explicitly (e.g., @[1] or newSeq[int]() instead of @[])")
+    result = NimInt # Return placeholder to avoid cascading errors
   else:
     internalError(m.config, "getTypeDescAux(" & $t.kind & ')')
     result = ""
