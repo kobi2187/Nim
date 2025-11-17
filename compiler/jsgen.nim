@@ -1660,10 +1660,13 @@ proc genSym(p: PProc, n: PNode, r: var TCompRes) =
   var s = n.sym
   case s.kind
   of skVar, skLet, skParam, skTemp, skResult, skForVar:
-    if s.loc.snippet == "":
-      internalError(p.config, n.info, "symbol has no generated name: " & s.name.s)
+    # Issue #24696: Check for compile-time symbols before checking generated name
+    # Compile-time variables don't get generated names since they're compile-time only
     if sfCompileTime in s.flags:
       genVarInit(p, s, if s.astdef != nil: s.astdef else: newNodeI(nkEmpty, s.info))
+      return  # Compile-time variables don't generate runtime code
+    if s.loc.snippet == "":
+      internalError(p.config, n.info, "symbol has no generated name: " & s.name.s)
     if jsNoLambdaLifting in p.config.legacyFeatures and s.kind == skParam:
       genCopyForParamIfNeeded(p, n)
     let k = mapType(p, s.typ)
