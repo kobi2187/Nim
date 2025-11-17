@@ -1104,6 +1104,13 @@ proc getTypeDescAux(m: BModule; origTyp: PType, check: var IntSet; kind: TypeDes
       "cannot generate code for union type '" & typeToString(t) & "'; " &
       "union types must be resolved to a specific type before code generation")
     result = NimInt # Return placeholder to avoid cascading errors
+  of tyGenericParam:
+    # Issue #23789: Generic type parameters need instantiation before code generation
+    let info = if origTyp.sym != nil: origTyp.sym.info else: unknownLineInfo
+    localError(m.config, info,
+      "cannot generate code for uninstantiated generic type '" & typeToString(t) & "'; " &
+      "provide explicit type parameters (e.g., foo[int] instead of foo)")
+    result = NimInt # Return placeholder to avoid cascading errors
   else:
     internalError(m.config, "getTypeDescAux(" & $t.kind & ')')
     result = ""
