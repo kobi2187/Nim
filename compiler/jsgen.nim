@@ -2768,7 +2768,8 @@ proc genProc(oldProc: PProc, prc: PSym): Rope =
   var resultAsgn: Rope = ""
   var name = mangleName(p.module, prc)
   let header = generateHeader(p, prc)
-  if prc.typ.returnType != nil and sfPure notin prc.flags:
+  if prc.typ.returnType != nil and sfPure notin prc.flags and prc.ast.len > resultPos:
+    # Issue #25229: Generic procs with exportc may not have result node in AST
     resultSym = prc.ast[resultPos].sym
     let mname = mangleName(p.module, resultSym)
     # otherwise uses "fat pointers"
