@@ -113,3 +113,5 @@ nimdoc.out.css
 !/nimdoc/testproject/expected/*
 pkgs/
 /compiler/compiler/
+callgrind.out.*
+*.exe
