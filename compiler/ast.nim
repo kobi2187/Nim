@@ -809,13 +809,48 @@ proc typeBodyImpl*(n: PType): PType {.inline.} = n.sonsImpl[^1]
 
 proc genericHead*(n: PType): PType {.inline.} = n.sonsImpl[0]
 
+# skipTypes cache: Use pointer-based caching for types with valid uniqueIds
+# Types with uniqueId (0,0) are skipped to avoid collisions
+type
+  SkipTypesCacheKey = tuple[p: pointer, kinds: TTypeKinds]
+
+var
+  skipTypesCache {.threadvar.}: Table[SkipTypesCacheKey, PType]
+
+proc clearSkipTypesCache*() =
+  skipTypesCache.clear()
+
 proc skipTypes*(t: PType, kinds: TTypeKinds): PType =
   ## Used throughout the compiler code to test whether a type tree contains or
   ## doesn't contain a specific type/types - it is often the case that only the
   ## last child nodes of a type tree need to be searched. This is a really hot
   ## path within the compiler!
+
+  # Only cache types with valid (non-zero) uniqueIds to avoid collisions
+  # Many types share uniqueId (0,0) which would cause incorrect cache hits
+  let canCache = t.uniqueId.module != 0 or t.uniqueId.item != 0
+
+  if canCache:
+    let key: SkipTypesCacheKey = (cast[pointer](t), kinds)
+    if skipTypesCache.hasKey(key):
+      let cached = skipTypesCache[key]
+      # Verify cache is still valid by recomputing
+      var verification = t
+      while verification.kind in kinds: verification = last(verification)
+      if cached == verification:
+        return cached
+      else:
+        # Type chain changed! Cache is stale, don't use it
+        discard
+
+  # Compute result
   result = t
   while result.kind in kinds: result = last(result)
+
+  # Store in cache only for types with valid uniqueIds
+  if canCache:
+    let key: SkipTypesCacheKey = (cast[pointer](t), kinds)
+    skipTypesCache[key] = result
 
 proc newIntTypeNode*(intVal: BiggestInt, typ: PType): PNode =
   let kind = skipTypes(typ, abstractVarRange).kind

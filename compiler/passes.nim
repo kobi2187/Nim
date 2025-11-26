@@ -221,6 +221,11 @@ proc compileSystemModule*(graph: ModuleGraph) =
     discard graph.compileModule(graph.config.m.systemFileIdx, {sfSystemModule})
 
 proc compileProject*(graph: ModuleGraph; projectFileIdx = InvalidFileIdx) =
+  # Note: No need to clear caches here - each bootstrap iteration is a separate process
+  # But we keep the calls for loadCompilerProc which benefits from clearing
+
+  clearCompilerProcCache()  # This helps because compiler procs can change between compilations
+
   connectCallbacks(graph)
   let conf = graph.config
   wantMainModule(conf)

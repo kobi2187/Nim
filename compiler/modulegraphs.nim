@@ -421,15 +421,32 @@ proc copyTypeProps*(g: ModuleGraph; module: int; dest, src: PType) =
     if op != nil:
       setAttachedOp(g, module, dest, k, op)
 
+# loadCompilerProc cache: cache by string name (stable across bootstrap iterations)
+var
+  compilerProcCache {.threadvar.}: Table[string, tuple[module: int, id: int32]]
+
+proc clearCompilerProcCache*() =
+  compilerProcCache.clear()
+
 proc loadCompilerProc*(g: ModuleGraph; name: string): PSym =
   result = nil
   if g.config.symbolFiles == disabledSf: return nil
+
+  # Check cache first for O(1) lookup
+  if name in compilerProcCache:
+    let cached = compilerProcCache[name]
+    result = loadSymFromId(g.config, g.cache, g.packed, cached.module, toPackedItemId(cached.id))
+    if result != nil:
+      strTableAdd(g.compilerprocs, result)
+      return result
 
   # slow, linear search, but the results are cached:
   for module in 0..<len(g.packed):
     #if isCachedModule(g, module):
     let x = searchForCompilerproc(g.packed[module], name)
     if x >= 0:
+      # Cache the result before returning
+      compilerProcCache[name] = (module, x)
       result = loadSymFromId(g.config, g.cache, g.packed, module, toPackedItemId(x))
       if result != nil:
         strTableAdd(g.compilerprocs, result)
