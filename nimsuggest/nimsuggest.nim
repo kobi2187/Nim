@@ -570,6 +570,19 @@ proc execCmd(cmd: string; graph: ModuleGraph; cachedMsgs: CachedMsgs) =
     execute(conf.ideCmd, AbsoluteFile orig, AbsoluteFile dirtyfile, line, col, tag, graph)
   sentinel()
 
+proc cleanupStaleErrors(graph: ModuleGraph, maxFiles: int = 50) =
+  if graph.suggestErrors.len > maxFiles:
+    var filesToKeep: seq[FileIndex] = @[]
+    for fileIdx in graph.suggestErrors.keys:
+      if graph.getModule(fileIdx) != nil:
+        filesToKeep.add(fileIdx)
+    if filesToKeep.len < graph.suggestErrors.len:
+      var newErrors = initTable[FileIndex, seq[Suggest]]()
+      for fileIdx in filesToKeep:
+        newErrors[fileIdx] = graph.suggestErrors[fileIdx]
+      graph.suggestErrors = newErrors
+      myLog fmt "Cleaned up error cache: {filesToKeep.len} files kept"
+
 proc recompileFullProject(graph: ModuleGraph) =
   benchmark "Recompilation(clean)":
     graph.resetForBackend()
@@ -596,12 +609,20 @@ proc mainThread(graph: ModuleGraph) =
   graph.doStopCompile = proc (): bool = requests.peek() > 0
   var idle = 0
   var cachedMsgs: CachedMsgs = @[]
+  var commandCount = 0
+  const maxCachedMsgs = 1000
+  const cleanupInterval = 100
   while true:
     let (hasData, req) = requests.tryRecv()
     if hasData:
       conf.writelnHook = wrHook
       conf.suggestionResultHook = sugResultHook
       execCmd(req, graph, cachedMsgs)
+      if cachedMsgs.len > maxCachedMsgs:
+        cachedMsgs.setLen 0
+      inc commandCount
+      if commandCount mod cleanupInterval == 0:
+        cleanupStaleErrors(graph)
       idle = 0
     else:
       os.sleep 250
@@ -807,12 +828,14 @@ proc recompilePartially(graph: ModuleGraph, projectFileIdx = InvalidFileIdx) =
       myLog fmt "Failed clean recompilation:\n {e.msg} \n\n {e.getStackTrace()}"
 
 func deduplicateSymInfoPair[SymInfoPair](xs: seq[SymInfoPair]): seq[SymInfoPair] =
-  # xs contains duplicate items and we want to filter them by range because the
-  # sym may not match. This can happen when xs contains the same definition but
-  # with different signature because suggestSym might be called multiple times
-  # for the same symbol (e. g. including/excluding the pragma)
-  result = newSeqOfCap[SymInfoPair](xs.len)
-  for itm in xs.reversed:
+  if xs.len == 0:
+    return @[]
+  const maxDedup = 5000
+  let limitedLen = min(xs.len, maxDedup)
+  result = newSeqOfCap[SymInfoPair](limitedLen)
+  var i = xs.len - 1
+  while i >= 0 and result.len < limitedLen:
+    let itm = xs[i]
     var found = false
     for res in result:
       if res.info.exactEquals(itm.info):
@@ -820,18 +843,17 @@ func deduplicateSymInfoPair[SymInfoPair](xs: seq[SymInfoPair]): seq[SymInfoPair]
         break
     if not found:
       result.add(itm)
+    dec i
   result.reverse()
 
 func deduplicateSymInfoPair(xs: SuggestFileSymbolDatabase, isGenericInstance: bool): SuggestFileSymbolDatabase =
-  # xs contains duplicate items and we want to filter them by range because the
-  # sym may not match. This can happen when xs contains the same definition but
-  # with different signature because suggestSym might be called multiple times
-  # for the same symbol (e. g. including/excluding the pragma)
+  const maxItems = 5000
+  let limitedCap = min(xs.lineInfo.len, maxItems)
   result = SuggestFileSymbolDatabase(
-    lineInfo: newSeqOfCap[TinyLineInfo](xs.lineInfo.len),
-    sym: newSeqOfCap[PSym](xs.sym.len),
+    lineInfo: newSeqOfCap[TinyLineInfo](limitedCap),
+    sym: newSeqOfCap[PSym](limitedCap),
     isDecl: newPackedBoolArray(),
-    caughtExceptions: newSeqOfCap[seq[PType]](xs.caughtExceptions.len),
+    caughtExceptions: newSeqOfCap[seq[PType]](limitedCap),
     caughtExceptionsSet: newPackedBoolArray(),
     isGenericInstance: newPackedBoolArray(),
     fileIndex: xs.fileIndex,
@@ -839,7 +861,7 @@ func deduplicateSymInfoPair(xs: SuggestFileSymbolDatabase, isGenericInstance: bo
     isSorted: false
   )
   var i = xs.lineInfo.high
-  while i >= 0:
+  while i >= 0 and result.lineInfo.len < maxItems:
     let itm = xs.lineInfo[i]
     var found = false
     for res in result.lineInfo:
@@ -1127,9 +1149,13 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
     let symbol = graph.findSymData(file, line, col)
     if not symbol.isNil:
       var res: seq[SymInfoPair] = @[]
+      const maxUsages = 10000
       for s in graph.suggestSymbolsIter:
         if s.sym.symbolEqual(symbol.sym):
           res.add(s)
+          if res.len >= maxUsages:
+            myLog fmt "Limiting usages to {maxUsages} results"
+            break
       for s in res.deduplicateSymInfoPair():
         graph.suggestResult(s.sym, s.info)
   of ideHighlight:
@@ -1176,13 +1202,16 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
           s.sym.info == s.info:
         if contains(s.sym.name.s, file.string):
           inc counter
-          res = res.filterIt(not it.info.exactEquals(s.info))
-          res.add s
-          # stop after first 1000 matches...
+          var isDuplicate = false
+          for existing in res:
+            if existing.info.exactEquals(s.info):
+              isDuplicate = true
+              break
+          if not isDuplicate:
+            res.add s
           if counter > 1000:
             break
 
-    # ... then sort them by weight ...
     res.sort() do (left, right: SymInfoPair) -> int:
       let
         leftString = left.sym.name.s
@@ -1196,7 +1225,6 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
       else:
         result = cmp(leftIndex, rightIndex)
 
-    # ... and send first 100 results
     if res.len > 0:
       for i in 0 .. min(100, res.len - 1):
         let s = res[i]
