@@ -499,6 +499,16 @@ proc nextTypeId*(x: IdGenerator): ItemId {.inline.} =
   inc x.typeId
   result = ItemId(module: x.module, item: x.typeId)
 
+# Global counter for truly unique type IDs
+# This ensures uniqueId is actually unique across all types in a compilation
+var globalUniqueTypeCounter {.threadvar.}: int32
+
+proc nextUniqueTypeId*(): ItemId {.inline.} =
+  ## Generate a truly unique type ID that never collides
+  ## Uses a special module ID (-1) and global counter
+  inc globalUniqueTypeCounter
+  result = ItemId(module: -1, item: globalUniqueTypeCounter)
+
 when false:
   proc nextId*(x: IdGenerator): ItemId {.inline.} =
     inc x.item
@@ -809,10 +819,10 @@ proc typeBodyImpl*(n: PType): PType {.inline.} = n.sonsImpl[^1]
 
 proc genericHead*(n: PType): PType {.inline.} = n.sonsImpl[0]
 
-# skipTypes cache: Use pointer-based caching for types with valid uniqueIds
-# Types with uniqueId (0,0) are skipped to avoid collisions
+# skipTypes cache: Use uniqueId-based caching
+# uniqueId is now truly unique (global counter) so we can cache safely
 type
-  SkipTypesCacheKey = tuple[p: pointer, kinds: TTypeKinds]
+  SkipTypesCacheKey = tuple[id: ItemId, kinds: TTypeKinds]
 
 var
   skipTypesCache {.threadvar.}: Table[SkipTypesCacheKey, PType]
@@ -826,31 +836,23 @@ proc skipTypes*(t: PType, kinds: TTypeKinds): PType =
   ## last child nodes of a type tree need to be searched. This is a really hot
   ## path within the compiler!
 
-  # Only cache types with valid (non-zero) uniqueIds to avoid collisions
-  # Many types share uniqueId (0,0) which would cause incorrect cache hits
-  let canCache = t.uniqueId.module != 0 or t.uniqueId.item != 0
-
-  if canCache:
-    let key: SkipTypesCacheKey = (cast[pointer](t), kinds)
-    if skipTypesCache.hasKey(key):
-      let cached = skipTypesCache[key]
-      # Verify cache is still valid by recomputing
-      var verification = t
-      while verification.kind in kinds: verification = last(verification)
-      if cached == verification:
-        return cached
-      else:
-        # Type chain changed! Cache is stale, don't use it
-        discard
+  # Check cache using uniqueId (now truly unique via global counter)
+  let key: SkipTypesCacheKey = (t.uniqueId, kinds)
+  if skipTypesCache.hasKey(key):
+    let cached = skipTypesCache[key]
+    # Defensive: verify cache is still valid (types are mutable!)
+    var verification = t
+    while verification.kind in kinds: verification = last(verification)
+    if cached == verification:
+      return cached
+    # else: type chain changed, recompute and update cache
 
   # Compute result
   result = t
   while result.kind in kinds: result = last(result)
 
-  # Store in cache only for types with valid uniqueIds
-  if canCache:
-    let key: SkipTypesCacheKey = (cast[pointer](t), kinds)
-    skipTypesCache[key] = result
+  # Store/update in cache
+  skipTypesCache[key] = result
 
 proc newIntTypeNode*(intVal: BiggestInt, typ: PType): PNode =
   let kind = skipTypes(typ, abstractVarRange).kind
@@ -1004,9 +1006,10 @@ iterator signature*(t: PType): PType =
 
 proc newType*(kind: TTypeKind; idgen: IdGenerator; owner: PSym; son: sink PType = nil): PType =
   let id = nextTypeId idgen
+  let uniqueId = nextUniqueTypeId()  # Use global counter for truly unique IDs
   result = PType(kind: kind, ownerFieldImpl: owner, sizeImpl: defaultSize,
                  alignImpl: defaultAlignment, itemId: id,
-                 uniqueId: id, sonsImpl: @[])
+                 uniqueId: uniqueId, sonsImpl: @[])
   if son != nil:
     result.sonsImpl.add son
   when false:
