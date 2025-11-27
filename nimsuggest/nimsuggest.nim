@@ -96,6 +96,9 @@ type
     sev: Severity
   CachedMsgs = seq[CachedMsg]
 
+type
+  SymbolLocationCache = Table[int, seq[SymInfoPair]]
+
 var
   gPort = 6000.Port
   gAddress = "127.0.0.1"
@@ -107,6 +110,7 @@ var
 
   requests: Channel[string]
   results: Channel[Suggest]
+  gSymbolLocationCache: SymbolLocationCache
 
 proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, line, col: int; tag: string,
   graph: ModuleGraph);
@@ -570,6 +574,18 @@ proc execCmd(cmd: string; graph: ModuleGraph; cachedMsgs: CachedMsgs) =
     execute(conf.ideCmd, AbsoluteFile orig, AbsoluteFile dirtyfile, line, col, tag, graph)
   sentinel()
 
+proc buildSymbolLocationCache(graph: ModuleGraph): SymbolLocationCache =
+  result = initTable[int, seq[SymInfoPair]]()
+  for s in graph.suggestSymbolsIter:
+    let symId = s.sym.id
+    if not result.hasKey(symId):
+      result[symId] = @[]
+    result[symId].add(s)
+  myLog fmt "Built symbol location cache with {result.len} unique symbols"
+
+proc invalidateSymbolCache() =
+  gSymbolLocationCache.clear()
+
 proc cleanupStaleErrors(graph: ModuleGraph, maxFiles: int = 50) =
   if graph.suggestErrors.len > maxFiles:
     var filesToKeep: seq[FileIndex] = @[]
@@ -584,6 +600,7 @@ proc cleanupStaleErrors(graph: ModuleGraph, maxFiles: int = 50) =
       myLog fmt "Cleaned up error cache: {filesToKeep.len} files kept"
 
 proc recompileFullProject(graph: ModuleGraph) =
+  invalidateSymbolCache()
   benchmark "Recompilation(clean)":
     graph.resetForBackend()
     graph.resetSystemArtifacts()
@@ -806,6 +823,7 @@ proc handleCmdLine(cache: IdentCache; conf: ConfigRef) =
 # v3 start
 
 proc recompilePartially(graph: ModuleGraph, projectFileIdx = InvalidFileIdx) =
+  invalidateSymbolCache()
   if projectFileIdx == InvalidFileIdx:
     myLog "Recompiling partially from root"
   else:
@@ -1148,24 +1166,28 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
   of ideUse, ideDus:
     let symbol = graph.findSymData(file, line, col)
     if not symbol.isNil:
-      var res: seq[SymInfoPair] = @[]
-      const maxUsages = 10000
-      for s in graph.suggestSymbolsIter:
-        if s.sym.symbolEqual(symbol.sym):
-          res.add(s)
-          if res.len >= maxUsages:
-            myLog fmt "Limiting usages to {maxUsages} results"
-            break
-      for s in res.deduplicateSymInfoPair():
-        graph.suggestResult(s.sym, s.info)
+      if gSymbolLocationCache.len == 0:
+        myLog "Building symbol location cache for fast lookups"
+        gSymbolLocationCache = buildSymbolLocationCache(graph)
+
+      var res = gSymbolLocationCache.getOrDefault(symbol.sym.id, @[])
+      if res.len > 0:
+        for s in res.deduplicateSymInfoPair():
+          graph.suggestResult(s.sym, s.info)
+      else:
+        myLog fmt "Symbol {symbol.sym.name.s} not found in cache"
   of ideHighlight:
     let sym = graph.findSymData(file, line, col)
     if not sym.isNil:
+      let targetSymId = sym.sym.id
       let fs = graph.fileSymbols(fileIndex)
       var usages: seq[SymInfoPair] = @[]
+      const maxHighlight = 1000
       for i in fs.lineInfo.low..fs.lineInfo.high:
-        if fs.sym[i] == sym.sym:
+        if fs.sym[i].id == targetSymId:
           usages.add(fs.getSymInfoPair(i))
+          if usages.len >= maxHighlight:
+            break
       myLog fmt "Found {usages.len} usages in {file.string}"
       for s in usages:
         graph.suggestResult(s.sym, s.info)
