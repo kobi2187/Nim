@@ -272,7 +272,7 @@ proc countParameters(formal: PNode): tuple[required: int, total: int, hasVarargs
         inc result.required
 
 proc formatArgumentTable(c: PContext, n: PNode, formal: PNode, prefer: TPreferedDesc): string =
-  ## Generate a table comparing provided arguments with expected parameters
+  ## Generate a table comparing expected parameters with provided arguments
   result = ""
   let actualArgCount = n.len - 1  # subtract the callee
   let formalParamCount = if formal != nil and formal.len > 1: formal.len - 1 else: 0
@@ -282,30 +282,11 @@ proc formatArgumentTable(c: PContext, n: PNode, formal: PNode, prefer: TPrefered
     return
 
   result.add("\n")
-  result.add("    Provided     | Expected\n")
-  result.add("    -------------|------------------\n")
+  result.add("    Expected          | Provided\n")
+  result.add("    ------------------|------------------\n")
 
   for i in 1..maxRows:
     result.add("    ")
-
-    # Provided argument column
-    if i < n.len:
-      let arg = n[i]
-      let argType = if arg.typ != nil: typeToString(arg.typ, prefer) else: "?"
-      result.add(argType)
-    else:
-      result.add("(none)")
-
-    # Padding to align columns - aim for ~13 chars in first column
-    let providedText = if i < n.len and n[i].typ != nil:
-        typeToString(n[i].typ, prefer)
-      else:
-        "(none)"
-    let padding = max(0, 13 - providedText.len)
-    for _ in 0..<padding:
-      result.add(" ")
-
-    result.add(" | ")
 
     # Expected parameter column
     if formal != nil and i < formal.len and formal[i].kind == nkSym:
@@ -313,6 +294,26 @@ proc formatArgumentTable(c: PContext, n: PNode, formal: PNode, prefer: TPrefered
       result.add(param.name.s)
       result.add(": ")
       result.add(typeToString(param.typ, prefer))
+    else:
+      result.add("(none)")
+
+    # Padding to align columns - aim for ~18 chars in first column
+    let expectedText = if formal != nil and i < formal.len and formal[i].kind == nkSym:
+        let param = formal[i].sym
+        param.name.s & ": " & typeToString(param.typ, prefer)
+      else:
+        "(none)"
+    let padding = max(0, 18 - expectedText.len)
+    for _ in 0..<padding:
+      result.add(" ")
+
+    result.add(" | ")
+
+    # Provided argument column
+    if i < n.len:
+      let arg = n[i]
+      let argType = if arg.typ != nil: typeToString(arg.typ, prefer) else: "?"
+      result.add(argType)
     else:
       result.add("(none)")
 

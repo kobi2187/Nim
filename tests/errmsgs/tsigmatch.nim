@@ -6,10 +6,10 @@ but expected one of:
 proc f(a: A)
   first type mismatch at position: 2
   extra argument given; expected 1 argument, got 2
-    Provided     | Expected
-    -------------|------------------
-    A             | a: A
-    string        | (none)
+    Expected          | Provided
+    ------------------|------------------
+    a: A               | A
+    (none)             | string
 
 proc f(b: B)
   first type mismatch at position: 1
