@@ -271,6 +271,53 @@ proc countParameters(formal: PNode): tuple[required: int, total: int, hasVarargs
         # No default value, so it's required
         inc result.required
 
+proc formatArgumentTable(c: PContext, n: PNode, formal: PNode, prefer: TPreferedDesc): string =
+  ## Generate a table comparing provided arguments with expected parameters
+  result = ""
+  let actualArgCount = n.len - 1  # subtract the callee
+  let formalParamCount = if formal != nil and formal.len > 1: formal.len - 1 else: 0
+  let maxRows = max(actualArgCount, formalParamCount)
+
+  if maxRows == 0:
+    return
+
+  result.add("\n")
+  result.add("    Provided     | Expected\n")
+  result.add("    -------------|------------------\n")
+
+  for i in 1..maxRows:
+    result.add("    ")
+
+    # Provided argument column
+    if i < n.len:
+      let arg = n[i]
+      let argType = if arg.typ != nil: typeToString(arg.typ, prefer) else: "?"
+      result.add(argType)
+    else:
+      result.add("(none)")
+
+    # Padding to align columns - aim for ~13 chars in first column
+    let providedText = if i < n.len and n[i].typ != nil:
+        typeToString(n[i].typ, prefer)
+      else:
+        "(none)"
+    let padding = max(0, 13 - providedText.len)
+    for _ in 0..<padding:
+      result.add(" ")
+
+    result.add(" | ")
+
+    # Expected parameter column
+    if formal != nil and i < formal.len and formal[i].kind == nkSym:
+      let param = formal[i].sym
+      result.add(param.name.s)
+      result.add(": ")
+      result.add(typeToString(param.typ, prefer))
+    else:
+      result.add("(none)")
+
+    result.add("\n")
+
 proc presentFailedCandidates(c: PContext, n: PNode, errors: CandidateErrors):
                             (TPreferedDesc, string) =
   var prefer = preferName
@@ -370,6 +417,7 @@ proc presentFailedCandidates(c: PContext, n: PNode, errors: CandidateErrors):
               candidates.add("s")
             candidates.add(", got ")
             candidates.add($actualArgCount)
+            candidates.add(formatArgumentTable(c, n, err.sym.typ.n, prefer))
           candidates.add "\n"
         of kMissingParam:
           let paramCounts = countParameters(err.sym.typ.n)
@@ -382,6 +430,7 @@ proc presentFailedCandidates(c: PContext, n: PNode, errors: CandidateErrors):
             candidates.add("s")
           candidates.add(", got ")
           candidates.add($actualArgCount)
+          candidates.add(formatArgumentTable(c, n, err.sym.typ.n, prefer))
           candidates.add "\n"
         of kExtraGenericParam:
           candidates.add("  extra generic param given")
@@ -511,6 +560,7 @@ proc presentFailedCandidates(c: PContext, n: PNode, errors: CandidateErrors):
               candidates.add("s")
             candidates.add(", got ")
             candidates.add($actualArgCount)
+            candidates.add(formatArgumentTable(c, n, err.sym.typ.n, prefer))
         of kMissingParam:
           let paramCounts = countParameters(err.sym.typ.n)
           let actualArgCount = n.len - 1  # subtract the callee
@@ -522,6 +572,7 @@ proc presentFailedCandidates(c: PContext, n: PNode, errors: CandidateErrors):
             candidates.add("s")
           candidates.add(", got ")
           candidates.add($actualArgCount)
+          candidates.add(formatArgumentTable(c, n, err.sym.typ.n, prefer))
         of kExtraGenericParam:
           candidates.add("\n  extra generic param given")
         of kMissingGenericParam:
