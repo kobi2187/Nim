@@ -250,6 +250,27 @@ proc effectProblem(f, a: PType; result: var string; c: PContext) =
         if not c.graph.compatibleProps(c.graph, f, a):
           result.add "\n  The `.requires` or `.ensures` properties are incompatible."
 
+proc countParameters(formal: PNode): tuple[required: int, total: int, hasVarargs: bool] =
+  ## Count the number of required and total parameters for a procedure
+  ## Returns: (required params, total params, has varargs)
+  result = (0, 0, false)
+  if formal == nil or formal.len <= 1:
+    return
+
+  for i in 1..<formal.len:
+    if formal[i].kind == nkSym:
+      let param = formal[i].sym
+      inc result.total
+
+      # Check if this is a varargs parameter
+      if param.typ.kind == tyVarargs:
+        result.hasVarargs = true
+        # Varargs are not counted as required
+      # Check if this parameter has a default value
+      elif param.ast == nil or param.ast.kind == nkEmpty:
+        # No default value, so it's required
+        inc result.required
+
 proc presentFailedCandidates(c: PContext, n: PNode, errors: CandidateErrors):
                             (TPreferedDesc, string) =
   var prefer = preferName
@@ -333,10 +354,34 @@ proc presentFailedCandidates(c: PContext, n: PNode, errors: CandidateErrors):
           candidates.add("  positional param was already given as named param")
           candidates.add "\n"
         of kExtraArg:
-          candidates.add("  extra argument given")
+          let paramCounts = countParameters(err.sym.typ.n)
+          let actualArgCount = n.len - 1  # subtract the callee
+          if paramCounts.hasVarargs:
+            candidates.add("  extra argument given")
+          else:
+            candidates.add("  extra argument given; expected ")
+            candidates.add($paramCounts.total)
+            if paramCounts.required < paramCounts.total:
+              candidates.add(" (")
+              candidates.add($paramCounts.required)
+              candidates.add(" required)")
+            candidates.add(" argument")
+            if paramCounts.total != 1:
+              candidates.add("s")
+            candidates.add(", got ")
+            candidates.add($actualArgCount)
           candidates.add "\n"
         of kMissingParam:
+          let paramCounts = countParameters(err.sym.typ.n)
+          let actualArgCount = n.len - 1  # subtract the callee
           candidates.add("  missing parameter: " & nameParam)
+          candidates.add("; expected at least ")
+          candidates.add($paramCounts.required)
+          candidates.add(" argument")
+          if paramCounts.required != 1:
+            candidates.add("s")
+          candidates.add(", got ")
+          candidates.add($actualArgCount)
           candidates.add "\n"
         of kExtraGenericParam:
           candidates.add("  extra generic param given")
@@ -449,8 +494,34 @@ proc presentFailedCandidates(c: PContext, n: PNode, errors: CandidateErrors):
             candidates.add("\n  unknown named parameter: " & $nArg[0])
         of kAlreadyGiven: candidates.add("\n  named param already provided: " & $nArg[0])
         of kPositionalAlreadyGiven: candidates.add("\n  positional param was already given as named param")
-        of kExtraArg: candidates.add("\n  extra argument given")
-        of kMissingParam: candidates.add("\n  missing parameter: " & nameParam)
+        of kExtraArg:
+          let paramCounts = countParameters(err.sym.typ.n)
+          let actualArgCount = n.len - 1  # subtract the callee
+          if paramCounts.hasVarargs:
+            candidates.add("\n  extra argument given")
+          else:
+            candidates.add("\n  extra argument given; expected ")
+            candidates.add($paramCounts.total)
+            if paramCounts.required < paramCounts.total:
+              candidates.add(" (")
+              candidates.add($paramCounts.required)
+              candidates.add(" required)")
+            candidates.add(" argument")
+            if paramCounts.total != 1:
+              candidates.add("s")
+            candidates.add(", got ")
+            candidates.add($actualArgCount)
+        of kMissingParam:
+          let paramCounts = countParameters(err.sym.typ.n)
+          let actualArgCount = n.len - 1  # subtract the callee
+          candidates.add("\n  missing parameter: " & nameParam)
+          candidates.add("; expected at least ")
+          candidates.add($paramCounts.required)
+          candidates.add(" argument")
+          if paramCounts.required != 1:
+            candidates.add("s")
+          candidates.add(", got ")
+          candidates.add($actualArgCount)
         of kExtraGenericParam:
           candidates.add("\n  extra generic param given")
         of kMissingGenericParam:

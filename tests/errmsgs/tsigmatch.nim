@@ -5,7 +5,7 @@ tsigmatch.nim(111, 4) Error: type mismatch: got <A, string>
 but expected one of:
 proc f(a: A)
   first type mismatch at position: 2
-  extra argument given
+  extra argument given; expected 1 argument, got 2
 proc f(b: B)
   first type mismatch at position: 1
   required type for b: B
