@@ -1954,6 +1954,7 @@ proc makeTupleAssignments(c: PContext; n: PNode): PNode =
       result.add newAsgnStmt(lhs[i], newTupleAccessRaw(tempNode, i))
 
 proc semAsgn(c: PContext, n: PNode; mode=asgnNormal): PNode =
+  echo "DEBUG: semAsgn reached"
   checkSonsLen(n, 2, c.config)
   var a = n[0]
   case a.kind
@@ -2018,6 +2019,13 @@ proc semAsgn(c: PContext, n: PNode; mode=asgnNormal): PNode =
   # a = b # both are vars, means: a[] = b[]
   # a = b # b no 'var T' means: a = addr(b)
   var le = a.typ
+
+  # Fix for missing 'type' keyword (issue #...)
+  if (le == nil or le.kind == tyError):
+    let rhs = semExprWithType(c, n[1], {efTypeAllowed})
+    if rhs.typ != nil and rhs.typ.kind == tyTypeDesc:
+      localError(c.config, n.info, "type definition requires 'type' keyword")
+
   let assignable = isAssignable(c, a)
   let root = getRoot(a)
   let useStrictDefLet = root != nil and root.kind == skLet and
@@ -2062,6 +2070,7 @@ proc semAsgn(c: PContext, n: PNode; mode=asgnNormal): PNode =
 
     fixAbstractType(c, n)
     asgnToResultVar(c, n, n[0], n[1])
+
   result = n
 
 proc semReturn(c: PContext, n: PNode): PNode =
