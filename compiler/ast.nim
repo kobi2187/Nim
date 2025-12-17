@@ -826,9 +826,12 @@ type
 
 var
   skipTypesCache {.threadvar.}: Table[SkipTypesCacheKey, PType]
+  # Debug: Track uniqueId -> pointer mappings to detect collisions
+  uniqueIdDebug {.threadvar.}: Table[ItemId, seq[pointer]]
 
 proc clearSkipTypesCache*() =
   skipTypesCache.clear()
+  uniqueIdDebug.clear()
 
 proc skipTypes*(t: PType, kinds: TTypeKinds): PType =
   ## Used throughout the compiler code to test whether a type tree contains or
