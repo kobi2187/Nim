@@ -1,0 +1,23 @@
+markupTitle	dependency_resolution.md	dependency_resolution.html	dependency_resolution.md		0
+heading	Dependency Resolution	dependency_resolution.html#dependency-resolution	 Dependency Resolution		0
+heading	Overview	dependency_resolution.html#overview	  Overview		0
+heading	Enabling the Feature	dependency_resolution.html#enabling-the-feature	  Enabling the Feature		0
+heading	How It Works	dependency_resolution.html#how-it-works	  How It Works		0
+heading	1. Dependency Graph Construction	dependency_resolution.html#Z1dot-dependency-graph-construction	   1. Dependency Graph Construction		0
+heading	2. Topological Sort	dependency_resolution.html#Z2dot-topological-sort	   2. Topological Sort		0
+heading	3. Cycle Detection	dependency_resolution.html#Z3dot-cycle-detection	   3. Cycle Detection		0
+heading	Features	dependency_resolution.html#features	  Features		0
+heading	Smart Reordering	dependency_resolution.html#smart-reordering	   Smart Reordering		0
+heading	Circular Dependency Resolution	dependency_resolution.html#circular-dependency-resolution	   Circular Dependency Resolution		0
+heading	Debug Mode	dependency_resolution.html#debug-mode	   Debug Mode		0
+heading	Comparison with Code Reordering	dependency_resolution.html#comparison-with-code-reordering	  Comparison with Code Reordering		0
+heading	Implementation Details	dependency_resolution.html#implementation-details	  Implementation Details		0
+heading	Files Modified	dependency_resolution.html#files-modified	   Files Modified		0
+heading	Architecture	dependency_resolution.html#architecture	   Architecture		0
+heading	Limitations	dependency_resolution.html#limitations	  Limitations		0
+heading	Future Enhancements	dependency_resolution.html#future-enhancements	  Future Enhancements		0
+heading	Examples	dependency_resolution.html#examples	  Examples		0
+heading	Example 1: Type and Proc Dependencies	dependency_resolution.html#example-1colon-type-and-proc-dependencies	   Example 1: Type and Proc Dependencies		0
+heading	Example 2: Circular Types	dependency_resolution.html#example-2colon-circular-types	   Example 2: Circular Types		0
+heading	Example 3: Complex Dependencies	dependency_resolution.html#example-3colon-complex-dependencies	   Example 3: Complex Dependencies		0
+heading	See Also	dependency_resolution.html#see-also	  See Also		0

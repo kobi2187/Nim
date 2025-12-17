@@ -1,0 +1,18 @@
+nimTitle	depresolution	depresolution.html	module depresolution		0
+nim	DepNode	depresolution.html#DepNode	type DepNode		24
+nim	DepGraph	depresolution.html#DepGraph	type DepGraph		32
+nim	SortResult	depresolution.html#SortResult	object SortResult		38
+nim	crkForwardDecl	depresolution.html#crkForwardDecl	CycleResolutionKind.crkForwardDecl		42
+nim	crkMerge	depresolution.html#crkMerge	CycleResolutionKind.crkMerge		42
+nim	crkError	depresolution.html#crkError	CycleResolutionKind.crkError		42
+nim	CycleResolutionKind	depresolution.html#CycleResolutionKind	enum CycleResolutionKind		42
+nim	newDepGraph	depresolution.html#newDepGraph,IdentCache,ConfigRef	proc newDepGraph(cache: IdentCache; config: ConfigRef): DepGraph		251
+nim	addNode	depresolution.html#addNode,DepGraph,string,PNode,HashSet[string]	proc addNode(graph: DepGraph; id: string; ast: PNode; deps: HashSet[string])		260
+nim	buildDependencyGraph	depresolution.html#buildDependencyGraph,IdentCache,ConfigRef,PNode	proc buildDependencyGraph(cache: IdentCache; config: ConfigRef; n: PNode): DepGraph		288
+nim	topologicalSort	depresolution.html#topologicalSort,DepGraph	proc topologicalSort(graph: DepGraph): SortResult		319
+nim	canUseForwardDecl	depresolution.html#canUseForwardDecl,DepGraph,seq[string]	proc canUseForwardDecl(graph: DepGraph; cycle: seq[string]): bool		405
+nim	canMergeNodes	depresolution.html#canMergeNodes,DepGraph,seq[string]	proc canMergeNodes(graph: DepGraph; cycle: seq[string]): bool		414
+nim	getCycleResolutionKind	depresolution.html#getCycleResolutionKind,DepGraph,seq[string]	proc getCycleResolutionKind(graph: DepGraph; cycle: seq[string]): CycleResolutionKind		433
+nim	reorderNodes	depresolution.html#reorderNodes,DepGraph,seq[string]	proc reorderNodes(graph: DepGraph; sorted: seq[string]): PNode		444
+nim	reportCycle	depresolution.html#reportCycle,ConfigRef,DepGraph,seq[string]	proc reportCycle(config: ConfigRef; graph: DepGraph; cycle: seq[string])		452
+nim	resolveAndReorder	depresolution.html#resolveAndReorder,ConfigRef,IdentCache,PNode	proc resolveAndReorder(config: ConfigRef; cache: IdentCache; n: PNode): PNode		496

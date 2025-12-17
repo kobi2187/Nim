@@ -1,0 +1,2 @@
+nimTitle	suggest_imports	suggest_imports.html	module suggest_imports		0
+nim	importSuggestions	suggest_imports.html#importSuggestions	const importSuggestions		7
